@@ -16,6 +16,27 @@ type CheckInAPI struct {
 	userID string
 }
 
+type encryptedResponseMetadata struct {
+	Code int    `json:"code"`
+	Data string `json:"data"`
+}
+
+func encryptedResponseCode(body []byte) interface{} {
+	var metadata encryptedResponseMetadata
+	if err := json.Unmarshal(body, &metadata); err != nil {
+		return "unavailable"
+	}
+	return metadata.Code
+}
+
+func encryptedResponseDataLength(body []byte) interface{} {
+	var metadata encryptedResponseMetadata
+	if err := json.Unmarshal(body, &metadata); err != nil {
+		return "unavailable"
+	}
+	return len(metadata.Data)
+}
+
 func NewCheckInAPI(c *client.Client, userID string) *CheckInAPI {
 	return &CheckInAPI{
 		client: c,
@@ -44,6 +65,13 @@ func (a *CheckInAPI) GetDailyList(ctx context.Context) (*DailyListData, error) {
 
 	plaintext, err := a.client.DecryptResponse(resp, ts)
 	if err != nil {
+		logger.Warn("Daily-list response decryption failed",
+			"status", resp.StatusCode,
+			"content_type", resp.Headers.Get("Content-Type"),
+			"body_bytes", len(resp.Body),
+			"response_code", encryptedResponseCode(resp.Body),
+			"ciphertext_bytes", encryptedResponseDataLength(resp.Body),
+		)
 		return nil, fmt.Errorf("解密任务列表失败: %w", err)
 	}
 
